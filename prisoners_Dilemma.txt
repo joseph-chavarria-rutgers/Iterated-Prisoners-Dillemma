@@ -1,0 +1,82 @@
+Set Rewards
+
+ T = 5 // Temptation (player defects, other cooperates)
+ R = 3 // Reciprocity(both players cooperate)
+ M = 1 // Mutiny(both players defect) 
+ S = 0 // Sucker (player cooperates, other defects) 
+
+PAYOFF = {
+
+(D,C) --> T
+(C,C) --> R
+(D,D) --> M
+(C,D) --> S
+
+Create player structure
+def init(self, label)
+self.label = label          //sets label of object for every new player
+self.score = 0              //initializes each player to score 0
+
+every player is given choice of cooperate or defect
+
+def make_move(self, player_history, opp_history)         //base function for each strategy
+
+strategies will override and decide C or D
+create history for each round in order to define strategy of tit for tat 
+
+init empy list for each history
+
+define strategies 
+
+class AlwaysDefect(Player)
+
+make_move(self,my_history,opp_history)
+return D 					// AlwaysDefect returns D regardless of opponent history
+
+class AlwaysCooperate(Player)
+
+Make_move(self,my_history, opp_history)
+return C					//AlwaysCooperate returns C regardless of opponent history
+
+class RandomAction(Player
+use some sort of random function with 50% probability
+return C or return D					//Completely random player to mess with Tit for Tat
+
+
+class TitForTat(player)
+
+make_move(self, my_history, opp_history)
+
+if length(opp_history) == 0, then return C
+else return opp_history[-1] 				//just return whatever your opponent played last
+
+atomic round of game
+
+def play_round(p1, p2,h1 list, h2 list)
+
+p1 makes move from h1 and h2
+p2 makes move from h2 and h1 
+
+score points and append to histories
+
+
+play multiple rounders per pair 		//we will define different round quantities for different results
+def play_match(p1,p2, rounds = whatever #)
+
+for i <= int quantity
+	play_round(p1,p2,h1,h2)
+
+
+control population composition of each strategy
+(not sure how to do this yet) 
+
+create round_robin method
+make sure each distinct pair plays match 
+
+for each i to n
+	for j to (i+1,n)
+		play_match(players i, players j, rounds for pair)
+
+print results with sum of scores
+use average of each strategy's scores for final result 
+
