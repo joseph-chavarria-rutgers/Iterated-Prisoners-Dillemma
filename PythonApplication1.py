@@ -19,6 +19,10 @@ from __future__ import annotations
 import argparse
 import random
 from typing import Dict, List, Tuple
+import os
+
+# Track which strategy labels existed in generation 0 so we can show extinct strategies
+INITIAL_LABELS: set[str] = set()
 
 
 # ==========================
@@ -101,6 +105,14 @@ class TitForTat(Player):
         if len(opp_history) == 0:
             return 'C'
         return opp_history[-1]
+    
+class Grudger(Player):
+    def __init__(self):
+        super().__init__('Grudger')
+
+    def make_move(self, my_history: List[str], opp_history: List[str]) -> str:
+        # Stateless: defect if the opponent has defected earlier in THIS match
+        return 'D' if 'D' in opp_history else 'C'
 
 
 # ==========================
@@ -143,6 +155,7 @@ def build_population(
     n_coop: int,
     n_defect: int,
     n_rand: int,
+    n_grudge: int,
     p_cooperate_random: float = 0.5,
 ) -> List[Player]:
     """
@@ -158,6 +171,8 @@ def build_population(
         players.append(AlwaysDefect())
     for _ in range(n_rand):
         players.append(RandomPlayer(p_cooperate_random))
+    for _ in range(n_grudge):
+        players.append(Grudger())
     return players
 
 
@@ -174,6 +189,8 @@ def make_player_from_label(label: str, p_rand: float) -> Player:
         return AlwaysDefect()
     elif label == 'Random':
         return RandomPlayer(p_rand)
+    elif label == 'Grudger':
+        return Grudger()
     else:
         raise ValueError(f"Unknown strategy label: {label}")
 
@@ -215,6 +232,8 @@ def print_results(players: List[Player], rounds_per_pair: int, generation: int |
     """
     Pretty-print tournament settings and per-strategy outcomes.
     If generation is provided, it is included in the header.
+
+    Extinct strategies that were present in generation 0 will be shown with count=0.
     """
     n = len(players)
     total_pairs = n * (n - 1) // 2
@@ -223,17 +242,24 @@ def print_results(players: List[Player], rounds_per_pair: int, generation: int |
     header = "=== Prisoner's Dilemma Tournament Results ==="
     if generation is not None:
         header = f"=== Generation {generation} Results ==="
-    print("\n" + header)
-    print(f"Players: {n}")
-    print(f"Rounds per pair: {rounds_per_pair}")
-    print(f"Total rounds played: {total_rounds}")
+    print("\n" + header, flush=True)
+    print(f"Players: {n}", flush=True)
+    print(f"Rounds per pair: {rounds_per_pair}", flush=True)
+    print(f"Total rounds played: {total_rounds}", flush=True)
 
     by = summarize_by_strategy(players)
-    print("\nStrategy summary (sorted by avg/player):")
+
+    # Include strategies that existed in generation 0 even if their current count is zero
+    for label in INITIAL_LABELS:
+        if label not in by:
+            by[label] = {"count": 0.0, "total_score": 0.0, "avg_per_player": 0.0}
+
+    print("\nStrategy summary (sorted by avg/player):", flush=True)
     for strat, d in sorted(by.items(), key=lambda kv: kv[1]["avg_per_player"], reverse=True):
         print(
             f"- {strat:16s} | count={int(d['count']):3d} | "
             f"total={int(d['total_score']):8d} | avg/player={d['avg_per_player']:.2f}"
+        , flush=True
         )
 
 
@@ -308,13 +334,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rounds", type=int, default=1000, help="Rounds per pair in each match.")
     parser.add_argument("--seed", type=int, default=None, help="Random seed for reproducibility.")
     parser.add_argument("--generations", type=int, default=5, help="Number of generations to simulate.")
+    parser.add_argument("--grudge", type=int, default=10, help="Number of Grudger players.")
     return parser.parse_args()
 
 
 def main() -> None:
+
     args = parse_args()
+    print(f"For help on how to use this program, run: python {os.path.basename(__file__)} --help", flush=True)
+
+    # Ensure we always seed the RNG and print the actual seed used so runs are reproducible
     if args.seed is not None:
-        random.seed(args.seed)
+        seed_used = int(args.seed)
+    else:
+        # Use system entropy to pick a seed and then seed the RNG with it so we can print it
+        seed_used = random.SystemRandom().randint(0, 2**32 - 1)
+
+    random.seed(seed_used)
+    print(f"Seed used: {seed_used}", flush=True)
 
     initial_players = build_population(
         n_tft=args.tft,
@@ -322,7 +359,12 @@ def main() -> None:
         n_defect=args.defect,
         n_rand=args.rand,
         p_cooperate_random=args.p_rand,
+        n_grudge=args.grudge,
     )
+
+    # record the set of strategy labels present at generation 0 so we can report extinct ones
+    INITIAL_LABELS.clear()
+    INITIAL_LABELS.update(p.label for p in initial_players)
 
     # If generations == 1, this behaves like the original single-tournament version.
     run_evolution(
